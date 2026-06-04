@@ -1,1 +1,886 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Onlymiru - The Sky Within You</title>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- html2canvas helps convert DOM to pristine shareable images -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    
+    <style>
+        :root {
+            --primary-bg: #f5f8fc;
+            --card-bg: rgba(255, 255, 255, 0.88);
+            --text-color: #4a5d6e;
+            --accent-color: #8da9c4;
+            --header-color: #0b2545;
+            --brand-color: #134074;
+        }
 
+        body {
+            font-family: 'Prompt', sans-serif;
+            background: linear-gradient(180deg, #ffd1d9 0%, #d1e8ff 100%);
+            color: var(--text-color);
+            min-height: 100vh;
+            transition: background 1.5s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+
+        .ambient-glow {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 85vw;
+            height: 85vw;
+            max-width: 650px;
+            max-height: 650px;
+            border-radius: 50%;
+            filter: blur(100px);
+            opacity: 0.65;
+            z-index: 1;
+            pointer-events: none;
+            transition: background 1.5s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+
+        .glass-card {
+            background: rgba(255, 255, 255, 0.82);
+            backdrop-filter: blur(25px);
+            -webkit-backdrop-filter: blur(25px);
+            border: 2px solid rgba(255, 255, 255, 0.6);
+            box-shadow: 0 20px 40px rgba(165, 180, 203, 0.2);
+        }
+
+        button.option-btn {
+            background: rgba(255, 255, 255, 0.9);
+            border: 2px solid #eef2f6;
+            transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        button.option-btn:hover {
+            border-color: #cbdcf0;
+            transform: translateY(-3px) scale(1.01);
+            box-shadow: 0 8px 16px rgba(165, 180, 203, 0.15);
+            background: #fbfdff;
+        }
+
+        button.option-btn:active {
+            transform: translateY(-1px) scale(0.99);
+        }
+
+        .keychain-container {
+            position: relative;
+            width: 290px;
+            height: 360px;
+            margin: 0 auto 15px;
+            filter: drop-shadow(0 15px 30px rgba(135, 150, 175, 0.25));
+        }
+
+        canvas#keychain-canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /* Cute animated pulse for saving state */
+        .shimmer-anim {
+            background: linear-gradient(90deg, #f3f3f3 25%, #e6e6e6 50%, #f3f3f3 75%);
+            background-size: 200% 100%;
+            animation: loading-shimmer 1.5s infinite;
+        }
+
+        @keyframes loading-shimmer {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+    </style>
+</head>
+<body class="flex flex-col items-center justify-center p-4 relative overflow-x-hidden">
+
+<audio id="bg-music" loop preload="auto">
+    <source src="Untitled (1).mp3" type="audio/mpeg">
+</audio>
+
+<div class="ambient-glow" id="bg-glow"></div>
+
+<!-- Floating control buttons -->
+<div data-html2canvas-ignore="true" class="fixed top-5 right-5 bg-white/90 backdrop-blur-md border border-pink-100 rounded-full w-12 h-12 flex items-center justify-center cursor-pointer shadow-md z-50 transition-transform active:scale-95 hover:scale-105" onclick="toggleMusic()" id="music-btn" title="เปิด/ปิดดนตรีประกอบ">
+    <svg id="music-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ff8fa3" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9 18V5l12-2v13"></path>
+        <circle cx="6" cy="18" r="3"></circle>
+        <circle cx="18" cy="16" r="3"></circle>
+    </svg>
+</div>
+
+<div id="quiz-container" class="glass-card max-w-lg w-full rounded-[36px] p-8 text-center relative z-10 transition-all duration-1000">
+    
+    <div class="brand-header flex flex-col items-center justify-center mb-4">
+        <div class="relative w-44 h-24 mb-1 flex items-center justify-center" id="logo-container">
+            <img id="brand-logo-img" src="logoonly_2.png" alt="Onlymiru Logo" class="max-w-full max-h-full object-contain transition-transform hover:scale-105 duration-300" onload="onLogoLoad()" onerror="onLogoError()">
+            
+            <!-- Beautiful inline SVG Fallback representing Onlymiru logo if image is delayed -->
+            <div id="logo-svg-fallback" class="hidden w-full h-full flex items-center justify-center">
+                <svg viewBox="0 0 220 100" class="w-full h-full">
+                    <circle cx="48" cy="42" r="11" stroke="#d5a26a" stroke-width="3" fill="none" />
+                    <path d="M12,38 C12,70 65,72 78,48 C88,20 110,18 122,46 C130,62 145,50 185,50" fill="none" stroke="#5c4d43" stroke-width="3.5" stroke-linecap="round" />
+                    <text x="80" y="80" font-family="'Prompt', sans-serif" font-size="20" font-style="italic" font-weight="600" fill="#5c4d43" letter-spacing="0.5">ONLYMIRU</text>
+                </svg>
+            </div>
+        </div>
+        <p class="text-[10px] tracking-widest text-pink-400/80 -mt-1 font-bold">THE SKY WITHIN YOU</p>
+    </div>
+    
+    <div data-html2canvas-ignore="true" class="progress-bar w-full h-2 bg-pink-50/70 rounded-full mb-6 overflow-hidden border border-pink-100/50">
+        <div id="progress-fill" class="h-full bg-gradient-to-r from-pink-300 to-sky-300 w-0 transition-all duration-500 rounded-full"></div>
+    </div>
+    
+    <div id="question-area">
+        <h1 id="question-text" class="text-lg md:text-xl text-slate-700 leading-relaxed font-normal mb-8 min-h-[3.5rem]">ท้องฟ้าของคุณสีอะไร?</h1>
+        <div class="options-grid grid gap-3.5" id="options-container"></div>
+    </div>
+
+    <div id="result-area" class="hidden">
+        <div class="keychain-container">
+            <div id="canvas-loader" class="absolute inset-0 flex flex-col items-center justify-center bg-white/60 rounded-[32px] backdrop-blur-sm z-20">
+                <div class="animate-bounce mb-2">
+                    <span class="text-3xl">🎨</span>
+                </div>
+                <p class="text-xs text-pink-400 font-medium">กำลังเตรียมพวงกุญแจสุดน่ารัก...</p>
+            </div>
+            <canvas id="keychain-canvas"></canvas>
+        </div>
+        
+        <p class="text-[10px] tracking-widest text-pink-400 font-bold uppercase mb-1">🍭 Onlymiru Sweet Keyring 🍭</p>
+        <div class="sky-title text-2xl font-bold text-slate-800 mb-2" id="res-title"></div>
+        <p class="sky-desc text-slate-600 leading-relaxed text-sm px-4 mb-6" id="res-desc"></p>
+        
+        <!-- Action Buttons: Saving Result image and Restarting -->
+        <div data-html2canvas-ignore="true" class="flex flex-col sm:flex-row gap-3 justify-center items-center mt-6">
+            <button class="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-pink-400 to-sky-400 hover:from-pink-500 hover:to-sky-500 text-white font-semibold rounded-full shadow-lg hover:shadow-pink-100 transition-all active:scale-95 text-xs md:text-sm flex items-center justify-center gap-2" onclick="saveResultCard()">
+                <span>บันทึกการ์ดผลลัพธ์ 📸</span>
+            </button>
+            <button class="w-full sm:w-auto px-6 py-3 bg-white hover:bg-slate-50 border-2 border-slate-100 text-slate-500 font-medium rounded-full shadow-sm transition-all active:scale-95 text-xs md:text-sm" onclick="location.reload()">
+                ทำอีกครั้ง 🌸
+            </button>
+        </div>
+    </div>
+    
+    <div class="brand-footer mt-6 text-[10px] text-slate-400 tracking-widest">🌈 Onlymiru Brand Experience 🌈</div>
+</div>
+
+<div id="save-modal" data-html2canvas-ignore="true" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden flex flex-col items-center justify-center p-4">
+    <div class="bg-white rounded-[32px] p-6 max-w-sm w-full text-center relative max-h-[90vh] flex flex-col justify-between shadow-2xl border border-pink-100/50">
+        <button onclick="closeSaveModal()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 text-2xl font-bold leading-none">&times;</button>
+        
+        <div class="mt-2">
+            <p class="text-sm font-semibold text-slate-700 mb-1">💖 การ์ดพวงกุญแจ Onlymiru ของคุณ 💖</p>
+            <p class="text-[10px] text-pink-400 font-medium mb-4">กดค้างที่รูปภาพด้านล่างเพื่อ 'บันทึกรูปภาพ' ลงเครื่องนะคะ</p>
+        </div>
+
+        <div class="overflow-y-auto mb-4 flex-grow flex items-center justify-center min-h-[250px] bg-slate-50 rounded-2xl p-2 border border-slate-100">
+            <img id="generated-card-img" class="max-w-full max-h-[50vh] rounded-xl shadow-sm object-contain" alt="Onlymiru Result Card">
+        </div>
+
+        <button onclick="closeSaveModal()" class="w-full py-3 bg-gradient-to-r from-pink-400 to-sky-400 text-white font-semibold rounded-full text-xs hover:from-pink-500 hover:to-sky-500 transition-all shadow-md">
+            ตกลง 🌸
+        </button>
+    </div>
+</div>
+
+<script>
+    function onLogoLoad() {
+        document.getElementById('brand-logo-img').classList.remove('hidden');
+        document.getElementById('logo-svg-fallback').classList.add('hidden');
+    }
+
+    function onLogoError() {
+        document.getElementById('brand-logo-img').classList.add('hidden');
+        document.getElementById('logo-svg-fallback').classList.remove('hidden');
+    }
+
+    const bgAudio = document.getElementById('bg-music');
+    let synthAudioCtx;
+    let synthOscillator;
+    let synthGainNode;
+    let isPlaying = false;
+    let useSynthFallback = false;
+
+    bgAudio.addEventListener('error', () => {
+        console.warn("Could not load uploaded MP3 track. Ready to switch to synth sound.");
+        useSynthFallback = true;
+    }, true);
+
+    function toggleMusic() {
+        if (!isPlaying) {
+            isPlaying = true;
+            document.getElementById('music-icon').style.stroke = "#ff5d8f";
+            
+            bgAudio.play().then(() => {
+                console.log("Playing the uploaded instrumental music file successfully.");
+                useSynthFallback = false;
+            }).catch(err => {
+                console.warn("Audio file play blocked, falling back to synthesizer:", err);
+                useSynthFallback = true;
+                playSynthAmbient();
+            });
+        } else {
+            isPlaying = false;
+            document.getElementById('music-icon').style.stroke = "currentColor";
+            bgAudio.pause();
+            if (synthOscillator) {
+                synthGainNode.gain.exponentialRampToValueAtTime(0.0001, synthAudioCtx.currentTime + 1);
+                setTimeout(() => { 
+                    if(!isPlaying && synthOscillator) {
+                        synthOscillator.stop();
+                        synthOscillator = null;
+                    }
+                }, 1000);
+            }
+        }
+    }
+
+    function playSynthAmbient() {
+        if (!synthAudioCtx) {
+            synthAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            synthGainNode = synthAudioCtx.createGain();
+            synthGainNode.connect(synthAudioCtx.destination);
+            synthGainNode.gain.setValueAtTime(0, synthAudioCtx.currentTime);
+        }
+        if (synthOscillator) synthOscillator.stop();
+        
+        synthOscillator = synthAudioCtx.createOscillator();
+        synthOscillator.type = 'sine';
+        synthOscillator.frequency.setValueAtTime(329.63, synthAudioCtx.currentTime); // Cozy E4 chord pitch
+        synthOscillator.connect(synthGainNode);
+        synthOscillator.start();
+        synthGainNode.gain.linearRampToValueAtTime(0.08, synthAudioCtx.currentTime + 2);
+    }
+
+    // These beautiful questions represent subtle projections of daily energy and emotional states.
+    const questions = [
+        { q: "ถ้าเปรียบเช้าวันจันทร์เป็นเสียงเพลง คุณอยากได้ยินเพลงแนวไหน?", options: [
+            { t: "เพลงบรรเลงเปียโนนุ่มๆ หวานๆ", s: "vanilla" },
+            { t: "เพลง Pop จังหวะน่ารักกระโดดโลดเต้น", s: "blue" },
+            { t: "เพลง Lo-Fi อบอุ่นฟังสบายๆ", s: "stormy" },
+            { t: "เพลง Acoustic ฟิลแดดเช้าสลัวๆ", s: "golden" }
+        ]},
+        { q: "เวลาคุณมองออกไปนอกหน้าต่าง คุณมองหาอะไรเป็นอันดับแรก?", options: [
+            { t: "ก้อนเมฆรูปน้องหมาหรือสัตว์น่ารักๆ", s: "aurora" },
+            { t: "แสงแดดระยิบระยับลอดยอดไม้", s: "golden" },
+            { t: "พระจันทร์เสี้ยวที่ซ่อนอยู่เงียบๆ", s: "starry" },
+            { t: "นกน้อยสองตัวกระซิบกระซาบกัน", s: "blue" }
+        ]},
+        { q: "เมื่อต้องเจอเรื่องผิดหวัง คุณมักจะ...", options: [
+            { t: "กอดหมอนนุ่มๆ ในห้องนอนเงียบๆ", s: "starry" },
+            { t: "กินของหวานรสชาติโปรดให้ใจฟู", s: "vanilla" },
+            { t: "เขียนระบายลงสมุดไดอารี่น่ารักๆ", s: "stormy" },
+            { t: "ออกไปเดินสูดอากาศสดชื่นดูผู้คน", s: "blue" }
+        ]},
+        { q: "สีของเสื้อผ้าที่คุณใส่แล้วรู้สึกใจฟูที่สุดมักจะเป็นโทนไหน?", options: [
+            { t: "สีหวานๆ สไตล์ Cotton Candy ชมพูหรือพาสเทล", s: "vanilla" },
+            { t: "สีฟ้าสว่างใสเหมือนน้ำทะเลฤดูร้อน", s: "blue" },
+            { t: "สีคลาสสิก มิมอลคุมโทนเทาครีม", s: "stormy" },
+            { t: "สีเหลืองเลมอนหรือส้มพีชสดใส", s: "aurora" }
+        ]},
+        { q: "นิยามของ 'ความสุข' สำหรับคุณคืออะไร?", options: [
+            { t: "การได้ซุกตัวในผ้าห่มอุ่นยาวๆ", s: "starry" },
+            { t: "การได้รับของขวัญเซอร์ไพรส์จากใครสักคน", s: "golden" },
+            { t: "การได้ช่วยเหลือแบ่งปันความใจดีให้คนอื่น", s: "vanilla" },
+            { t: "การได้ลองทำเมนูขนมหวานสูตรใหม่ๆ", s: "aurora" }
+        ]},
+        { q: "ถ้าคุณสามารถเสกสภาพอากาศได้ 1 วัน คุณจะเสกให้เป็นแบบไหน?", options: [
+            { t: "ละอองแดดสีทองอบอุ่น น่านอนเล่นกลางสวน", s: "golden" },
+            { t: "วันที่สายฝนตกเบาๆ ได้ยินเสียงเปาะแปะ", s: "stormy" },
+            { t: "ท้องฟ้าแจ่มใส ลมพัดโชยเย็นสบายทั้งวัน", s: "blue" },
+            { t: "ท้องฟ้าสลัวที่มีแสงออโรร่าสีพาสเทลเต้นระบำ", s: "aurora" }
+        ]},
+        { q: "ในกลุ่มเพื่อน คุณมักจะเป็นตัวแทนของหน้าที่อะไร?", options: [
+            { t: "ฝ่ายซัพพอร์ตคอยปลอบโยนและพกขนมมาแจก", s: "vanilla" },
+            { t: "หัวโจกฝ่ายนำเที่ยวและจัดแจงปาร์ตี้", s: "golden" },
+            { t: "คนคอยสร้างเสียงหัวเราะและรอยยิ้ม", s: "blue" },
+            { t: "คนลึกลับที่มีไอเดียแปลกใหม่ไม่ซ้ำใคร", s: "aurora" }
+        ]},
+        { q: "คุณชอบใช้เวลาช่วงค่ำคืนอันเงียบสงบไปกับอะไร?", options: [
+            { t: "นอนเหม่อมองโคมไฟเพดานรูปดาว", s: "starry" },
+            { t: "นั่งจด To-Do List น่ารักๆ ของวันพรุ่งนี้", s: "stormy" },
+            { t: "คุยคอลคุยสติกเกอร์กับเพื่อนคนสำคัญ", s: "vanilla" },
+            { t: "นั่งดูคลิปสัตว์โลกแสนซนจนเผลอหลับ", s: "aurora" }
+        ]},
+        { q: "ถ้าต้องเลือกที่พักที่ฟูจิตใจที่สุด คุณจะเลือกที่ไหน?", options: [
+            { t: "บ้านพักสีพาสเทลริมหาดส่วนตัว", s: "blue" },
+            { t: "คาเฟ่แอนด์เบดหรูหราอลังการ", s: "golden" },
+            { t: "กระท่อมไม้เล็กๆ กลางทุ่งหญ้า", s: "starry" },
+            { t: "เต็นท์กระจกใสกลางป่ามหัศจรรย์", s: "aurora" }
+        ]},
+        { q: "คำพูดไหนที่เยียวยาใจคุณได้นุ่มฟูที่สุด?", options: [
+            { t: "ไม่เป็นไรน้า เก่งมากแล้ว พักกินของอร่อยกันนะ", s: "vanilla" },
+            { t: "เย้! คุณน่ะสุดยอดที่สุดในโลกเลย!", s: "golden" },
+            { t: "ยิ้มบ่อยๆ นะ โลกใบนี้โชคดีที่มีคุณอยู่", s: "blue" },
+            { t: "ความมืดมนก็จะผ่านพ้นไป คลื่นลมจะสงบลงนะ", s: "stormy" }
+        ]},
+        { q: "ความน่ารักลึกๆ ของคุณที่ไม่มีใครค่อยรู้คืออะไร?", options: [
+            { t: "จริงๆ แล้วฉันแอบเป็นคนใจดีและอ่อนไหวมากๆ เลย", s: "vanilla" },
+            { t: "จริงๆ แล้วฉันแอบชื่นชอบการอยู่เงียบๆ คนเดียวสุดๆ", s: "starry" },
+            { t: "จริงๆ แล้วฉันคาดหวังความสำเร็จและทะเยอทะยานนะ", s: "golden" },
+            { t: "จริงๆ แล้วฉันมีความฝันจินตนาการแสนหลุดโลก", s: "aurora" }
+        ]},
+        { q: "ถ้าพรุ่งนี้เป็นวันหยุดสุดท้าย คุณอยากทำอะไรที่สุด?", options: [
+            { t: "กอดกุมมือและคุยเล่นกับคนที่ชอบและรัก", s: "vanilla" },
+            { t: "ออกเดินทางจัดโร้ดทริปสนุกๆ กับแก๊งรัก", s: "blue" },
+            { t: "นั่งปิกนิกกินขนมปังเนยรับลมชิลๆ", s: "golden" },
+            { t: "นั่งวาดภาพระบายสีที่ชอบโดยไม่มีใครกวน", s: "starry" }
+        ]}
+    ];
+
+    const results = {
+        vanilla: { 
+            title: "Cotton Candy Vanilla Sky 🍦", 
+            desc: "คุณคือความอบอุ่นละมุนละไมดั่งสายไหมสีหวาน! เป็นคนอ่อนโยน ใส่ใจหัวใจคนอื่นเสมอ และมีเวทมนตร์แห่งความเยียวยาพกติดตัวไปทุกที่ พวงกุญแจโทนหวานหยดของ Onlymiru นี้ออกแบบมาเพื่อคุณนะ",
+            colorText: "#ff91a4",
+            drawSky: function(ctx, w, h, xOffset = 0, yOffset = 0, radius = 75) {
+                let grad = ctx.createLinearGradient(xOffset, yOffset - radius, xOffset, yOffset + radius);
+                grad.addColorStop(0, '#ffb3ba');
+                grad.addColorStop(0.5, '#ffdfd3');
+                grad.addColorStop(1, '#e8dbfc');
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                ctx.arc(xOffset, yOffset, radius, 0, Math.PI * 2);
+                ctx.fill();
+                
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+                ctx.beginPath();
+                ctx.arc(xOffset - 15, yOffset + 20, radius * 0.35, 0, Math.PI*2);
+                ctx.arc(xOffset + 15, yOffset + 15, radius * 0.45, 0, Math.PI*2);
+                ctx.arc(xOffset - 35, yOffset + 25, radius * 0.25, 0, Math.PI*2);
+                ctx.fill();
+
+                drawTinyStar(ctx, xOffset - 25, yOffset - 25, 6, 3, 5, '#ffee93');
+                drawTinyStar(ctx, xOffset + 30, yOffset - 15, 8, 4, 5, '#fff');
+            }
+        },
+        blue: { 
+            title: "Baby Balloon Sky 🎈", 
+            desc: "คุณคือปุยเมฆลอยล่องที่พกพาพลังงานบวกสดใสเต็มเปี่ยม! รักอิสระ รักสนุก มองโลกในแง่ดีสุดๆ พร้อมลอยไปบนน่านฟ้าแสนสดชื่นไปกับพวงกุญแจโทนเบบี้บลูชิ้นนี้จาก Onlymiru",
+            colorText: "#74c0fc",
+            drawSky: function(ctx, w, h, xOffset = 0, yOffset = 0, radius = 75) {
+                let grad = ctx.createLinearGradient(xOffset, yOffset - radius, xOffset, yOffset + radius);
+                grad.addColorStop(0, '#a0c4ff');
+                grad.addColorStop(0.6, '#b9f2ff');
+                grad.addColorStop(1, '#caffbf');
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                ctx.arc(xOffset, yOffset, radius, 0, Math.PI * 2);
+                ctx.fill();
+                
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+                ctx.beginPath();
+                ctx.arc(xOffset, yOffset + 10, radius * 0.5, 0, Math.PI*2);
+                ctx.arc(xOffset - 30, yOffset + 15, radius * 0.35, 0, Math.PI*2);
+                ctx.arc(xOffset + 30, yOffset + 15, radius * 0.35, 0, Math.PI*2);
+                ctx.fill();
+
+                ctx.fillStyle = 'rgba(255, 179, 186, 0.6)';
+                ctx.beginPath();
+                ctx.arc(xOffset - 18, yOffset + 15, 5, 0, Math.PI*2);
+                ctx.arc(xOffset + 18, yOffset + 15, 5, 0, Math.PI*2);
+                ctx.fill();
+
+                ctx.fillStyle = 'rgba(255, 182, 193, 0.7)';
+                ctx.beginPath();
+                ctx.arc(xOffset + 25, yOffset - 25, 12, 0, Math.PI*2);
+                ctx.fill();
+            }
+        },
+        stormy: { 
+            title: "Cozy Lilac Rain 🌂", 
+            desc: "คุณคือสุนทรียภาพแห่งความอบอุ่นในวันฝนพรำน่านอน! มีสติ นิ่งสงบ ชอบซุกตัวอ่านนิยายและกอดตุ๊กตาอย่างมีความสุข คุณคือผู้โอบรับทุกอารมณ์ด้วยหัวใจพาสเทลที่นุ่มนวล",
+            colorText: "#9c8fbc",
+            drawSky: function(ctx, w, h, xOffset = 0, yOffset = 0, radius = 75) {
+                let grad = ctx.createLinearGradient(xOffset, yOffset - radius, xOffset, yOffset + radius);
+                grad.addColorStop(0, '#cdb4db');
+                grad.addColorStop(0.5, '#b5e2fa');
+                grad.addColorStop(1, '#a2d2ff');
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                ctx.arc(xOffset, yOffset, radius, 0, Math.PI * 2);
+                ctx.fill();
+                
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+                ctx.beginPath();
+                ctx.arc(xOffset - 10, yOffset - 10, radius * 0.45, 0, Math.PI*2);
+                ctx.arc(xOffset + 25, yOffset - 15, radius * 0.35, 0, Math.PI*2);
+                ctx.fill();
+
+                drawTinyStar(ctx, xOffset, yOffset + 15, 12, 6, 5, '#ffe5ec');
+                drawTinyStar(ctx, xOffset - 25, yOffset + 25, 8, 4, 5, '#ffee93');
+                drawTinyStar(ctx, xOffset + 25, yOffset + 25, 8, 4, 5, '#ffee93');
+            }
+        },
+        golden: { 
+            title: "Sherbet Golden Hour 🍊", 
+            desc: "คุณคือดวงอาทิตย์ดวงน้อยที่แสนเจิดจรัสพกพาความน่ารักสะกดสายตา! อบอุ่น มีออร่าดึงดูดใจ และเปี่ยมด้วยเสน่ห์ดั่งนมอุ่นยามพระอาทิตย์ตกดินอันหอมกรุ่นของ Onlymiru",
+            colorText: "#fca311",
+            drawSky: function(ctx, w, h, xOffset = 0, yOffset = 0, radius = 75) {
+                let grad = ctx.createLinearGradient(xOffset, yOffset - radius, xOffset, yOffset + radius);
+                grad.addColorStop(0, '#ffd1a9');
+                grad.addColorStop(0.6, '#ff9aa2');
+                grad.addColorStop(1, '#fffae0');
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                ctx.arc(xOffset, yOffset, radius, 0, Math.PI * 2);
+                ctx.fill();
+                
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+                ctx.beginPath();
+                ctx.arc(xOffset, yOffset + 10, radius * 0.4, 0, Math.PI*2);
+                ctx.fill();
+
+                ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+                ctx.lineWidth = 2.5;
+                ctx.beginPath();
+                ctx.arc(xOffset - 30, yOffset - 20, 6, Math.PI, 0, false);
+                ctx.arc(xOffset - 18, yOffset - 20, 6, Math.PI, 0, false);
+                ctx.stroke();
+            }
+        },
+        starry: { 
+            title: "Sweet Dreams Galaxy 🌌", 
+            desc: "คุณคือความลับแสนพิเศษในห้วงลึกลับที่แสนงดงาม! มีจินตนาการกว้างไกลเหมือนดวงดาวสีทองระยิบระยับ และมีความสงบสุขที่คอยชโลมหัวใจผู้คนในยามที่มืดมิด",
+            colorText: "#7209b7",
+            drawSky: function(ctx, w, h, xOffset = 0, yOffset = 0, radius = 75) {
+                let grad = ctx.createLinearGradient(xOffset, yOffset - radius, xOffset, yOffset + radius);
+                grad.addColorStop(0, '#560bad');
+                grad.addColorStop(0.5, '#7209b7');
+                grad.addColorStop(1, '#b5179e');
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                ctx.arc(xOffset, yOffset, radius, 0, Math.PI * 2);
+                ctx.fill();
+                
+                ctx.fillStyle = '#ffdfd3';
+                ctx.beginPath();
+                ctx.arc(xOffset - 15, yOffset - 15, 22, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#560bad'; 
+                ctx.beginPath();
+                ctx.arc(xOffset - 24, yOffset - 15, 22, 0, Math.PI * 2);
+                ctx.fill();
+
+                drawTinyStar(ctx, xOffset + 25, yOffset - 15, 10, 4, 4, '#fffae0');
+                drawTinyStar(ctx, xOffset - 10, yOffset + 25, 6, 2, 4, '#fffae0');
+                drawTinyStar(ctx, xOffset + 30, yOffset + 20, 8, 3, 4, '#fff');
+            }
+        },
+        aurora: { 
+            title: "Magical Aurora Dream 💚", 
+            desc: "คุณคือริ้วแสงออโรร่าสีมิ้นท์หวานสุดมหัศจรรย์! ยูนีคสุดๆ ไม่ชอบเดินซ้ำรอยเท้าใคร เปี่ยมด้วยไอเดียบรรเจิดชวนฝัน และรักการเดินทางสไตล์ Onlymiru ในทุกมิติ",
+            colorText: "#2ec4b6",
+            drawSky: function(ctx, w, h, xOffset = 0, yOffset = 0, radius = 75) {
+                let grad = ctx.createLinearGradient(xOffset, yOffset - radius, xOffset, yOffset + radius);
+                grad.addColorStop(0, '#0a1128');
+                grad.addColorStop(0.6, '#004e64');
+                grad.addColorStop(1, '#25a18e');
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                ctx.arc(xOffset, yOffset, radius, 0, Math.PI * 2);
+                ctx.fill();
+                
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(xOffset, yOffset, radius, 0, Math.PI*2);
+                ctx.clip();
+                
+                let gradAur = ctx.createLinearGradient(xOffset - radius, 0, xOffset + radius, 0);
+                gradAur.addColorStop(0, 'rgba(158, 255, 217, 0.7)');
+                gradAur.addColorStop(0.5, 'rgba(158, 255, 217, 0.1)');
+                gradAur.addColorStop(1, 'rgba(158, 255, 217, 0.6)');
+                ctx.fillStyle = gradAur;
+                ctx.beginPath();
+                ctx.moveTo(xOffset - radius, yOffset - 20);
+                ctx.bezierCurveTo(xOffset - 30, yOffset - 50, xOffset + 30, yOffset + 20, xOffset + radius, yOffset - 10);
+                ctx.lineTo(xOffset + radius, yOffset + 30);
+                ctx.bezierCurveTo(xOffset + 30, yOffset + 40, xOffset - 30, yOffset - 10, xOffset - radius, yOffset + 10);
+                ctx.closePath();
+                ctx.fill();
+
+                let gradAur2 = ctx.createLinearGradient(xOffset - radius, 0, xOffset + radius, 0);
+                gradAur2.addColorStop(0, 'rgba(255, 179, 186, 0.5)');
+                gradAur2.addColorStop(1, 'rgba(255, 179, 186, 0.1)');
+                ctx.fillStyle = gradAur2;
+                ctx.beginPath();
+                ctx.moveTo(xOffset - radius, yOffset + 10);
+                ctx.bezierCurveTo(xOffset - 20, yOffset - 10, xOffset + 20, yOffset + 40, xOffset + radius, yOffset + 15);
+                ctx.lineTo(xOffset + radius, yOffset + 45);
+                ctx.bezierCurveTo(xOffset + 20, yOffset + 50, xOffset - 20, yOffset + 10, xOffset - radius, yOffset + 25);
+                ctx.closePath();
+                ctx.fill();
+                
+                ctx.restore();
+
+                drawTinyStar(ctx, xOffset - 30, yOffset - 30, 6, 2.5, 4, '#fff');
+                drawTinyStar(ctx, xOffset + 30, yOffset - 25, 7, 3, 4, '#ffe5ec');
+            }
+        }
+    };
+
+    function drawTinyStar(ctx, cx, cy, spikes, outerRadius, innerRadius, fillStyle) {
+        let rot = Math.PI / 2 * 3;
+        let x = cx;
+        let y = cy;
+        let step = Math.PI / spikes;
+
+        ctx.save();
+        ctx.fillStyle = fillStyle;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy - outerRadius);
+        for (let i = 0; i < spikes; i++) {
+            x = cx + Math.cos(rot) * outerRadius;
+            y = cy + Math.sin(rot) * outerRadius;
+            ctx.lineTo(x, y);
+            rot += step;
+
+            x = cx + Math.cos(rot) * innerRadius;
+            y = cy + Math.sin(rot) * innerRadius;
+            ctx.lineTo(x, y);
+            rot += step;
+        }
+        ctx.lineTo(cx, cy - outerRadius);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+    }
+
+    let currentQ = 0;
+    let scores = { vanilla: 0, blue: 0, stormy: 0, golden: 0, starry: 0, aurora: 0 };
+
+    function renderQuestion() {
+        if (currentQ >= questions.length) {
+            showResult();
+            return;
+        }
+        
+        const qData = questions[currentQ];
+        const questionText = document.getElementById('question-text');
+        questionText.innerText = `${currentQ + 1}. ${qData.q}`;
+
+        const container = document.getElementById('options-container');
+        container.innerHTML = '';
+        
+        qData.options.forEach(opt => {
+            const btn = document.createElement('button');
+            btn.className = 'option-btn w-full p-4 rounded-[22px] text-left text-sm md:text-base font-normal text-slate-700';
+            btn.innerText = opt.t;
+            btn.onclick = () => {
+                scores[opt.s]++;
+                currentQ++;
+                updateProgress();
+                renderQuestion();
+            };
+            container.appendChild(btn);
+        });
+    }
+
+    function updateProgress() {
+        document.getElementById('progress-fill').style.width = (currentQ / questions.length * 100) + '%';
+    }
+
+    function drawVectorKeyring(canvas, ctx, skyDrawer, finalType) {
+        canvas.width = 400;
+        canvas.height = 500;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        const centerXP = 240;
+        const centerYP = 310;
+        const flowerR = 90;
+
+        // Render silver metal jump ring
+        ctx.save();
+        ctx.shadowColor = 'rgba(165,180,203,0.2)';
+        ctx.shadowBlur = 8;
+        let silverGrad = ctx.createLinearGradient(160, 40, 240, 120);
+        silverGrad.addColorStop(0, '#f1f5f9');
+        silverGrad.addColorStop(0.5, '#cbd5e1');
+        silverGrad.addColorStop(1, '#94a3b8');
+        ctx.strokeStyle = silverGrad;
+        ctx.lineWidth = 7;
+        ctx.beginPath();
+        ctx.arc(200, 80, 40, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+
+        // Connect chain link
+        ctx.strokeStyle = '#cbd5e1';
+        ctx.lineWidth = 4.5;
+        ctx.beginPath();
+        ctx.moveTo(200, 120);
+        ctx.lineTo(210, 160);
+        ctx.stroke();
+
+        // Elegant beaded strand with pastel blue colors
+        const beads = [
+            { x: 175, y: 135, r: 9, fill: ['#ffb3ba', '#ffdfd3'] }, 
+            { x: 150, y: 155, r: 11, fill: ['#fff', '#f1f5f9'] }, 
+            { x: 125, y: 180, r: 10, fill: ['#b9f2ff', '#90e0ef'] }, 
+            { x: 105, y: 210, r: 12, fill: ['#ffdfd3', '#ffd1b3'] }, 
+            { x: 90,  y: 245, r: 9, fill: ['#e8dbfc', '#b5179e'] }, 
+            { x: 80,  y: 280, r: 8,  fill: ['#fff', '#e2e8f0'] }  
+        ];
+
+        ctx.strokeStyle = 'rgba(203, 213, 225, 0.7)';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(200, 115);
+        ctx.bezierCurveTo(150, 130, 100, 180, 80, 280);
+        ctx.stroke();
+
+        beads.forEach(bead => {
+            ctx.save();
+            ctx.shadowColor = 'rgba(148, 163, 184, 0.15)';
+            ctx.shadowBlur = 4;
+            let beadGrad = ctx.createRadialGradient(bead.x - bead.r*0.3, bead.y - bead.r*0.3, bead.r*0.1, bead.x, bead.y, bead.r);
+            beadGrad.addColorStop(0, bead.fill[0]);
+            beadGrad.addColorStop(1, bead.fill[1]);
+            
+            ctx.fillStyle = beadGrad;
+            ctx.beginPath();
+            ctx.arc(bead.x, bead.y, bead.r, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.beginPath();
+            ctx.arc(bead.x - bead.r*0.3, bead.y - bead.r*0.3, bead.r*0.25, 0, Math.PI*2);
+            ctx.fill();
+            ctx.restore();
+        });
+
+        // Golden bell with soft shadows
+        ctx.save();
+        ctx.shadowColor = 'rgba(202,138,4,0.15)';
+        ctx.shadowBlur = 5;
+        let bellGrad = ctx.createRadialGradient(162, 102, 2, 165, 105, 15);
+        bellGrad.addColorStop(0, '#fffbeb');
+        bellGrad.addColorStop(0.7, '#fef08a');
+        bellGrad.addColorStop(1, '#eab308');
+        ctx.fillStyle = bellGrad;
+        ctx.beginPath();
+        ctx.arc(165, 105, 14, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.strokeStyle = '#eab308';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(165, 91, 4.5, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.fillStyle = '#a16207';
+        ctx.beginPath();
+        ctx.arc(165, 111, 3.5, 0, Math.PI, false);
+        ctx.fill();
+        ctx.restore();
+
+        // Render exquisite crystal flower acrylic frame
+        ctx.save();
+        ctx.shadowColor = 'rgba(165, 180, 203, 0.2)';
+        ctx.shadowBlur = 12;
+        ctx.shadowOffsetY = 6;
+        
+        ctx.beginPath();
+        const petals = 8;
+        const outerR = 125;
+        const innerR = 108;
+        for (let i = 0; i <= 360; i += 2) {
+            let rads = i * Math.PI / 180;
+            let r = innerR + (outerR - innerR) * (Math.sin(rads * petals) + 1) / 2;
+            let x = centerXP + r * Math.cos(rads);
+            let y = centerYP + r * Math.sin(rads);
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        
+        let crystalGrad = ctx.createRadialGradient(centerXP, centerYP, 50, centerXP, centerYP, outerR);
+        crystalGrad.addColorStop(0, 'rgba(255, 255, 255, 0.8)');
+        crystalGrad.addColorStop(0.8, 'rgba(248, 250, 252, 0.6)');
+        crystalGrad.addColorStop(1, 'rgba(255, 255, 255, 0.95)');
+        ctx.fillStyle = crystalGrad;
+        ctx.fill();
+        
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        ctx.restore();
+
+        // Inject gorgeous custom sky drawer inside the frame
+        skyDrawer(ctx, canvas.width, canvas.height, centerXP, centerYP, 78);
+
+        // Gentle bezel highlight
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(centerXP, centerYP, 78, 0, Math.PI*2);
+        ctx.stroke();
+        ctx.restore();
+
+        document.getElementById('canvas-loader').classList.add('hidden');
+    }
+
+    function processChromaKey(skyDrawer, resultType) {
+        const canvas = document.getElementById('keychain-canvas');
+        const ctx = canvas.getContext('2d');
+        const img = new Image();
+        
+        img.onload = function() {
+            try {
+                canvas.width = img.width;
+                canvas.height = img.height;
+                
+                // Prepare intermediate sky canvas
+                const skyCanvas = document.createElement('canvas');
+                skyCanvas.width = img.width;
+                skyCanvas.height = img.height;
+                const skyCtx = skyCanvas.getContext('2d');
+                skyDrawer(skyCtx, img.width, img.height, img.width/2 + 25, img.height/2 + 55, 140);
+                
+                // Draw original image to grab pixel data
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = img.width;
+                tempCanvas.height = img.height;
+                const tempCtx = tempCanvas.getContext('2d');
+                tempCtx.drawImage(img, 0, 0);
+                
+                const keyringData = tempCtx.getImageData(0, 0, img.width, img.height);
+                const skyData = skyCtx.getImageData(0, 0, img.width, img.height);
+                const outputData = ctx.createImageData(img.width, img.height);
+                
+                const kPixels = keyringData.data;
+                const sPixels = skyData.data;
+                const oPixels = outputData.data;
+                
+                for (let i = 0; i < kPixels.length; i += 4) {
+                    const r = kPixels[i];
+                    const g = kPixels[i+1];
+                    const b = kPixels[i+2];
+                    const a = kPixels[i+3];
+                    
+                    // High quality green chroma threshold
+                    const isGreen = (g > 110 && g > r * 1.35 && g > b * 1.35);
+                    const isBlack = (r < 35 && g < 35 && b < 35);
+                    
+                    if (isGreen) {
+                        oPixels[i] = sPixels[i];
+                        oPixels[i+1] = sPixels[i+1];
+                        oPixels[i+2] = sPixels[i+2];
+                        oPixels[i+3] = 255;
+                    } else if (isBlack) {
+                        oPixels[i+3] = 0; // Transparent background
+                    } else {
+                        oPixels[i] = r;
+                        oPixels[i+1] = g;
+                        oPixels[i+2] = b;
+                        oPixels[i+3] = a;
+                    }
+                }
+                
+                ctx.putImageData(outputData, 0, 0);
+                document.getElementById('canvas-loader').classList.add('hidden');
+                
+            } catch (err) {
+                console.warn("Canvas process fallback triggered:", err);
+                drawVectorKeyring(canvas, ctx, skyDrawer, resultType);
+            }
+        };
+        
+        img.onerror = function() {
+            drawVectorKeyring(canvas, ctx, skyDrawer, resultType);
+        };
+
+        img.crossOrigin = 'anonymous';
+        img.src = 'ดาวนำทาง.jpg';
+    }
+
+    function showResult() {
+        document.getElementById('question-area').style.display = 'none';
+        const finalType = Object.keys(scores).reduce((a, b) => scores[a] > scores[b] ? a : b);
+        const res = results[finalType];
+        
+        document.getElementById('res-title').innerText = res.title;
+        document.getElementById('res-desc').innerText = res.desc;
+        document.getElementById('result-area').style.display = 'block';
+
+        processChromaKey(res.drawSky, finalType);
+
+        // Set matching ambient backgrounds and glowing rings
+        const bgGlows = {
+            vanilla: 'radial-gradient(circle, rgba(255,179,186,0.9) 0%, rgba(255,223,211,0.4) 70%, rgba(0,0,0,0) 100%)',
+            blue: 'radial-gradient(circle, rgba(160,196,255,0.9) 0%, rgba(202,242,255,0.4) 70%, rgba(0,0,0,0) 100%)',
+            stormy: 'radial-gradient(circle, rgba(205,180,219,0.9) 0%, rgba(181,226,250,0.4) 70%, rgba(0,0,0,0) 100%)',
+            golden: 'radial-gradient(circle, rgba(255,209,169,0.9) 0%, rgba(255,250,224,0.4) 70%, rgba(0,0,0,0) 100%)',
+            starry: 'radial-gradient(circle, rgba(114,9,183,0.7) 0%, rgba(181,23,158,0.3) 70%, rgba(0,0,0,0) 100%)',
+            aurora: 'radial-gradient(circle, rgba(158,255,217,0.8) 0%, rgba(255,179,186,0.4) 70%, rgba(0,0,0,0) 100%)'
+        };
+        
+        const bgColors = {
+            vanilla: 'linear-gradient(180deg, #ffe5ec 0%, #ffd1d9 100%)',
+            blue: 'linear-gradient(180deg, #e7f5ff 0%, #d0ebff 100%)',
+            stormy: 'linear-gradient(180deg, #f3f0fc 0%, #e8e3f5 100%)',
+            golden: 'linear-gradient(180deg, #fff9db 0%, #ffe3e3 100%)',
+            starry: 'linear-gradient(180deg, #f1f3f5 0%, #e9ecef 100%)',
+            aurora: 'linear-gradient(180deg, #e6fcf5 0%, #c3fae8 100%)'
+        };
+
+        document.getElementById('bg-glow').style.background = bgGlows[finalType];
+        document.body.style.background = bgColors[finalType];
+    }
+
+    function saveResultCard() {
+        const targetElement = document.getElementById('quiz-container');
+        
+        const options = {
+            backgroundColor: null,
+            useCORS: true,
+            allowTaint: true,
+            scale: window.devicePixelRatio > 1 ? 2 : 3, // Premium quality
+            logging: false
+        };
+
+        targetElement.classList.add('shimmer-anim');
+
+        html2canvas(targetElement, options).then(canvas => {
+            targetElement.classList.remove('shimmer-anim');
+            const dataUrl = canvas.toDataURL('image/png');
+            
+            const link = document.createElement('a');
+            link.download = 'onlymiru-sky-keyring.png';
+            link.href = dataUrl;
+            
+            const modalImg = document.getElementById('generated-card-img');
+            modalImg.src = dataUrl;
+            
+            document.getElementById('save-modal').classList.remove('hidden');
+            document.getElementById('save-modal').classList.add('flex');
+
+            try {
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            } catch (downloadErr) {
+                console.warn("Direct download restricted, modal visible:", downloadErr);
+            }
+        }).catch(err => {
+            targetElement.classList.remove('shimmer-anim');
+            console.error("Error building canvas image:", err);
+        });
+    }
+
+    function closeSaveModal() {
+        document.getElementById('save-modal').classList.add('hidden');
+        document.getElementById('save-modal').classList.remove('flex');
+    }
+
+    renderQuestion();
+</script>
+
+</body>
+</html>
