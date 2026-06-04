@@ -113,6 +113,11 @@
     </svg>
 </div>
 
+<!-- Elegant helper tooltip next to the music button for mobile mute switch awareness -->
+<div data-html2canvas-ignore="true" id="music-tip" class="fixed top-20 right-5 bg-white/90 text-[10px] text-pink-400 font-medium py-1.5 px-3 rounded-full shadow-md border border-pink-50/50 backdrop-blur-md z-50 pointer-events-none transition-all duration-500 max-w-[160px] text-center hidden transform scale-95 opacity-0">
+    🔇 หากไม่ได้ยินเสียง อย่าลืมเปิดสวิตช์สั่น/สวิตช์ข้างเครื่องนะคะ 🌸
+</div>
+
 <div id="quiz-container" class="glass-card max-w-lg w-full rounded-[36px] p-8 text-center relative z-10 transition-all duration-1000">
     
     <div class="brand-header flex flex-col items-center justify-center mb-4">
@@ -211,11 +216,56 @@
         useSynthFallback = true;
     }, true);
 
+    // Synchronous unlocking to bypass strict iOS Safari and Android Chrome audio sandboxing policies
+    function initAudioOnUserGesture() {
+        try {
+            // 1. Force reload and prepare standard HTML5 Audio
+            if (bgAudio) {
+                bgAudio.load();
+            }
+            
+            // 2. Initialize and bind Web Audio API Context inside synchronous click thread
+            if (!synthAudioCtx) {
+                synthAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                synthGainNode = synthAudioCtx.createGain();
+                synthGainNode.connect(synthAudioCtx.destination);
+                synthGainNode.gain.setValueAtTime(0, synthAudioCtx.currentTime);
+            }
+            
+            // 3. Force resume suspended context state (mandatory for mobile browsers in idle states)
+            if (synthAudioCtx && synthAudioCtx.state === 'suspended') {
+                synthAudioCtx.resume();
+            }
+        } catch (e) {
+            console.warn("Mobile Audio Session unlock failed or deferred:", e);
+        }
+    }
+
     function toggleMusic() {
+        // Unlock and verify mobile audio context synchronously
+        initAudioOnUserGesture();
+
+        const tip = document.getElementById('music-tip');
+
         if (!isPlaying) {
             isPlaying = true;
             document.getElementById('music-icon').style.stroke = "#ff5d8f";
             
+            // Show cute mobile mute switch warning for 5 seconds
+            if (tip) {
+                tip.classList.remove('hidden');
+                setTimeout(() => {
+                    tip.classList.remove('scale-95', 'opacity-0');
+                    tip.classList.add('scale-100', 'opacity-100');
+                }, 50);
+                
+                setTimeout(() => {
+                    tip.classList.remove('scale-100', 'opacity-100');
+                    tip.classList.add('scale-95', 'opacity-0');
+                    setTimeout(() => tip.classList.add('hidden'), 500);
+                }, 5000);
+            }
+
             bgAudio.play().then(() => {
                 console.log("Playing the uploaded instrumental music file successfully.");
                 useSynthFallback = false;
@@ -228,33 +278,51 @@
             isPlaying = false;
             document.getElementById('music-icon').style.stroke = "currentColor";
             bgAudio.pause();
-            if (synthOscillator) {
-                synthGainNode.gain.exponentialRampToValueAtTime(0.0001, synthAudioCtx.currentTime + 1);
-                setTimeout(() => { 
-                    if(!isPlaying && synthOscillator) {
-                        synthOscillator.stop();
-                        synthOscillator = null;
-                    }
-                }, 1000);
+            
+            if (tip) {
+                tip.classList.add('hidden');
+                tip.style.opacity = '0';
+                tip.style.transform = 'scale(0.95)';
+            }
+
+            if (synthOscillator && synthAudioCtx) {
+                try {
+                    synthGainNode.gain.setValueAtTime(synthGainNode.gain.value, synthAudioCtx.currentTime);
+                    synthGainNode.gain.exponentialRampToValueAtTime(0.0001, synthAudioCtx.currentTime + 1);
+                    setTimeout(() => { 
+                        if(!isPlaying && synthOscillator) {
+                            synthOscillator.stop();
+                            synthOscillator = null;
+                        }
+                    }, 1000);
+                } catch(e) {
+                    console.warn("Error gracefully stopping synth engine:", e);
+                }
             }
         }
     }
 
     function playSynthAmbient() {
-        if (!synthAudioCtx) {
-            synthAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            synthGainNode = synthAudioCtx.createGain();
-            synthGainNode.connect(synthAudioCtx.destination);
-            synthGainNode.gain.setValueAtTime(0, synthAudioCtx.currentTime);
-        }
-        if (synthOscillator) synthOscillator.stop();
+        if (!synthAudioCtx) return;
         
-        synthOscillator = synthAudioCtx.createOscillator();
-        synthOscillator.type = 'sine';
-        synthOscillator.frequency.setValueAtTime(329.63, synthAudioCtx.currentTime); // Cozy E4 chord pitch
-        synthOscillator.connect(synthGainNode);
-        synthOscillator.start();
-        synthGainNode.gain.linearRampToValueAtTime(0.08, synthAudioCtx.currentTime + 2);
+        try {
+            if (synthAudioCtx.state === 'suspended') {
+                synthAudioCtx.resume();
+            }
+            
+            if (synthOscillator) synthOscillator.stop();
+            
+            synthOscillator = synthAudioCtx.createOscillator();
+            synthOscillator.type = 'sine';
+            synthOscillator.frequency.setValueAtTime(329.63, synthAudioCtx.currentTime); // Cozy E4 chord pitch
+            synthOscillator.connect(synthGainNode);
+            synthOscillator.start();
+            
+            synthGainNode.gain.setValueAtTime(0, synthAudioCtx.currentTime);
+            synthGainNode.gain.linearRampToValueAtTime(0.08, synthAudioCtx.currentTime + 2);
+        } catch(e) {
+            console.warn("Synth playback runtime error:", e);
+        }
     }
 
     // These beautiful questions represent subtle projections of daily energy and emotional states.
