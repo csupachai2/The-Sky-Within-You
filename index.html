@@ -122,10 +122,10 @@
 </head>
 <body class="flex flex-col items-center justify-center p-4 relative overflow-x-hidden">
 
-<!-- Google Drive Direct Stream link with secondary fallbacks -->
+<!-- ใช้ไฟล์เพลง Untitled (1).mp3 ในโฟลเดอร์ของลูกค้าเป็นหลักอันดับ 1 และใช้ Google Drive เป็นตัวสำรอง -->
 <audio id="bg-music" loop preload="auto">
+    <source src="Untitled (1).mp3" type="audio/mpeg">
     <source src="https://docs.google.com/uc?export=download&id=1vu6boZHcGLgO0hYlunwDN0e9Z0mwBd5Q" type="audio/mpeg">
-    <source src="Untitled (1)_2.mp3" type="audio/mpeg">
 </audio>
 
 <!-- Elegant Cozy Splash Screen to unlock Audio on Mobile and Desktop -->
@@ -143,7 +143,7 @@
         </div>
         <h2 class="text-base font-semibold text-slate-700 mb-2">The Sky Within You</h2>
         <p class="text-xs text-slate-500 mb-8 leading-relaxed">ค้นพบเฉดสีท้องฟ้าพาสเทลแสนละมุน<br>ที่ซ่อนอยู่ในตัวคุณไปกับ Onlymiru 🌸</p>
-        <button onclick="startExperience()" class="px-8 py-3.5 bg-gradient-to-r from-pink-400 to-sky-400 hover:from-pink-500 hover:to-sky-500 text-white font-semibold rounded-full shadow-lg transition-all active:scale-95 text-xs md:text-sm w-full animate-bounce">
+        <button id="start-btn" onclick="startExperience()" class="px-8 py-3.5 bg-gradient-to-r from-pink-400 to-sky-400 hover:from-pink-500 hover:to-sky-500 text-white font-semibold rounded-full shadow-lg transition-all active:scale-95 text-xs md:text-sm w-full animate-bounce">
             เริ่มต้นเดินทาง 🌈
         </button>
     </div>
@@ -259,20 +259,20 @@
 
     const bgAudio = document.getElementById('bg-music');
     let synthAudioCtx;
-    let synthOscillator;
     let synthGainNode;
     let isPlaying = false;
     let useSynthFallback = false;
+    let synthInterval = null;
 
     bgAudio.addEventListener('error', () => {
-        console.warn("Audio stream blocked or unreachable. Ready for synthesizer fallback.");
+        console.warn("Audio file is blocked or missing. Synthesizer fallback is ready.");
         useSynthFallback = true;
     }, true);
 
     function initAudioOnUserGesture() {
         try {
             if (bgAudio) {
-                bgAudio.volume = 0.8;
+                bgAudio.volume = 0.85;
             }
             if (!synthAudioCtx) {
                 synthAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -284,27 +284,27 @@
                 synthAudioCtx.resume();
             }
         } catch (e) {
-            console.warn("Mobile audio unlock deferred.", e);
+            console.warn("Audio context generation deferred.", e);
         }
     }
 
     function startExperience() {
-        // Unlock mobile audio context
         initAudioOnUserGesture();
 
         isPlaying = true;
         document.getElementById('music-icon').style.stroke = "#ff5d8f";
 
-        // Try playing the direct stream audio
+        // พยายามเปิดเล่นไฟล์เพลงตรง ๆ (ทั้ง Untitled (1).mp3 หรือ Google Drive ตัวสำรอง)
         bgAudio.play().then(() => {
             useSynthFallback = false;
+            console.log("Playing the theme song successfully!");
         }).catch(err => {
-            console.warn("Native player play failed, launching fallback synthesizer...", err);
+            console.warn("Native browser blocked audio file autoplay. Playing warm synthesizer instead.", err);
             useSynthFallback = true;
             playSynthAmbient();
         });
 
-        // Beautiful transition fade out and remove splash screen
+        // ค่อย ๆ ซ่อนและลบหน้าจอเริ่มต้นออกอย่างละมุน
         const splash = document.getElementById('splash-screen');
         if (splash) {
             splash.classList.add('opacity-0', 'scale-105', 'pointer-events-none');
@@ -339,7 +339,6 @@
             bgAudio.play().then(() => {
                 useSynthFallback = false;
             }).catch(err => {
-                console.warn("Native player failed, launching warm synthesizer...");
                 useSynthFallback = true;
                 playSynthAmbient();
             });
@@ -354,20 +353,7 @@
                 tip.style.transform = 'scale(0.95)';
             }
 
-            if (synthOscillator && synthAudioCtx) {
-                try {
-                    synthGainNode.gain.setValueAtTime(synthGainNode.gain.value, synthAudioCtx.currentTime);
-                    synthGainNode.gain.exponentialRampToValueAtTime(0.0001, synthAudioCtx.currentTime + 0.8);
-                    setTimeout(() => { 
-                        if(!isPlaying && synthOscillator) {
-                            synthOscillator.stop();
-                            synthOscillator = null;
-                        }
-                    }, 800);
-                } catch(e) {
-                    console.warn("Synth shutdown error:", e);
-                }
-            }
+            stopSynthAmbient();
         }
     }
 
@@ -377,18 +363,61 @@
             if (synthAudioCtx.state === 'suspended') {
                 synthAudioCtx.resume();
             }
-            if (synthOscillator) synthOscillator.stop();
-            
-            synthOscillator = synthAudioCtx.createOscillator();
-            synthOscillator.type = 'triangle';
-            synthOscillator.frequency.setValueAtTime(261.63, synthAudioCtx.currentTime); // Sweet middle C
-            synthOscillator.connect(synthGainNode);
-            synthOscillator.start();
-            
             synthGainNode.gain.setValueAtTime(0, synthAudioCtx.currentTime);
-            synthGainNode.gain.linearRampToValueAtTime(0.12, synthAudioCtx.currentTime + 1.5);
+            synthGainNode.gain.linearRampToValueAtTime(0.2, synthAudioCtx.currentTime + 1.5);
+
+            const chords = [
+                [261.63, 329.63, 392.00, 493.88], // Cmaj7
+                [220.00, 261.63, 329.63, 392.00], // Am7
+                [174.61, 220.00, 261.63, 349.23], // Fmaj7
+                [196.00, 246.94, 293.66, 392.00]  // G7
+            ];
+            let chordIdx = 0;
+
+            function playNextChord() {
+                if (!isPlaying || !useSynthFallback) return;
+                let activeNotes = chords[chordIdx];
+
+                activeNotes.forEach((freq, idx) => {
+                    let osc = synthAudioCtx.createOscillator();
+                    let oscGain = synthAudioCtx.createGain();
+                    
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(freq, synthAudioCtx.currentTime);
+                    
+                    oscGain.gain.setValueAtTime(0, synthAudioCtx.currentTime);
+                    oscGain.gain.linearRampToValueAtTime(0.04, synthAudioCtx.currentTime + 1.0 + (idx * 0.2));
+                    oscGain.gain.exponentialRampToValueAtTime(0.0001, synthAudioCtx.currentTime + 3.8);
+                    
+                    osc.connect(oscGain);
+                    oscGain.connect(synthGainNode);
+                    
+                    osc.start();
+                    osc.stop(synthAudioCtx.currentTime + 4.0);
+                });
+
+                chordIdx = (chordIdx + 1) % chords.length;
+            }
+
+            playNextChord();
+            synthInterval = setInterval(playNextChord, 4000);
         } catch(e) {
-            console.warn("Synth playing exception:", e);
+            console.warn("Synth exception triggered:", e);
+        }
+    }
+
+    function stopSynthAmbient() {
+        if (synthInterval) {
+            clearInterval(synthInterval);
+            synthInterval = null;
+        }
+        if (synthAudioCtx && synthGainNode) {
+            try {
+                synthGainNode.gain.setValueAtTime(synthGainNode.gain.value, synthAudioCtx.currentTime);
+                synthGainNode.gain.exponentialRampToValueAtTime(0.0001, synthAudioCtx.currentTime + 1.0);
+            } catch(e) {
+                console.warn("Synth volume fade exception:", e);
+            }
         }
     }
 
@@ -477,7 +506,6 @@
             bgGradient: "linear-gradient(180deg, #d2f0ff 0%, #a4daff 100%)",
             glowColor: "#a0c4ff",
             drawSky: function(ctx, w, h, cx, cy, r, animFrame) {
-                // Clear blue sky background
                 let g = ctx.createLinearGradient(cx, cy - r, cx, cy + r);
                 g.addColorStop(0, '#80c8ff');
                 g.addColorStop(0.5, '#b3e5fc');
@@ -485,7 +513,6 @@
                 ctx.fillStyle = g;
                 ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
 
-                // Cute animated glowing sunburst
                 ctx.save();
                 ctx.translate(cx + r * 0.45, cy - r * 0.45);
                 let pulseScale = 1 + Math.sin(animFrame * 0.04) * 0.08;
@@ -496,7 +523,6 @@
                 ctx.beginPath(); ctx.arc(0, 0, 20, 0, Math.PI*2); ctx.fill();
                 ctx.restore();
 
-                // Fluffy moving clouds
                 ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
                 let cloudX1 = cx - 20 + Math.sin(animFrame * 0.01) * 15;
                 let cloudY1 = cy + 15;
@@ -506,7 +532,6 @@
                 ctx.arc(cloudX1 + 25, cloudY1 + 5, 16, 0, Math.PI*2);
                 ctx.fill();
 
-                // Small flying birds
                 ctx.strokeStyle = 'rgba(100, 150, 200, 0.8)';
                 ctx.lineWidth = 2.5;
                 ctx.lineCap = 'round';
@@ -524,7 +549,6 @@
             bgGradient: "linear-gradient(180deg, #ffe3e8 0%, #ffd1d9 100%)",
             glowColor: "#ffb3ba",
             drawSky: function(ctx, w, h, cx, cy, r, animFrame) {
-                // Morning vanilla peach sky
                 let g = ctx.createLinearGradient(cx, cy - r, cx, cy + r);
                 g.addColorStop(0, '#ff9a9e');
                 g.addColorStop(0.5, '#fecfef');
@@ -532,7 +556,6 @@
                 ctx.fillStyle = g;
                 ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
 
-                // Floating glowing warm hearts
                 let numHearts = 3;
                 ctx.fillStyle = 'rgba(255, 130, 160, 0.45)';
                 for (let i = 0; i < numHearts; i++) {
@@ -542,7 +565,6 @@
                     drawHeart(ctx, hx, hy, 16 * hscale);
                 }
 
-                // Smooth clouds at bottom
                 ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
                 let cloudX = cx + Math.cos(animFrame * 0.008) * 20;
                 ctx.beginPath();
@@ -551,7 +573,6 @@
                 ctx.arc(cloudX + 35, cy + 30, 18, 0, Math.PI*2);
                 ctx.fill();
 
-                // Sparkly glowing starlets
                 drawTinyStar(ctx, cx - 35, cy - 35, 4, 8, 3, 'rgba(255, 255, 255, ' + (0.5 + Math.sin(animFrame*0.06)*0.4) + ')');
                 drawTinyStar(ctx, cx + 45, cy - 10, 4, 10, 4, 'rgba(255, 255, 255, ' + (0.5 + Math.cos(animFrame*0.06)*0.4) + ')');
             }
@@ -559,13 +580,12 @@
         C: { 
             title: "Sunset Twilight Sky 🌅", 
             name: "ท้องฟ้ายามพระอาทิตย์ตกดิน",
-            desc: "คุณเป็นคนที่มีเสน่ห์น่าดึงดูดใจ มีความซับซ้อนในตัวเอง และเต็มไปด้วยแพสชัน (Passion) คุณมีความเป็นศิลปินในตัวสูง ชอบความสวยงาม ความโรแมนติก และสิ่งสร้างสรรค์ คุณไม่ใช่คนเรียบง่าย แต่เป็นคนที่มีอารมณ์ความรู้สึกที่ลึกซึ้งและเข้นข้น เมื่อรักหรือสนใจอะไร คุณจะทุ่มเทสุดตัวและมีความเป็นตัวของตัวเองสูงมาก",
-            highlight: "ความคิดสร้างสรรค์ที่โดดเด่น แรงบันดาลใจที่ไม่มีวันหมด และเสน่ห์เฉพาะตัวที่ไม่เหมือนใคร",
+            desc: "คุณเป็นคนที่มีเสน่ห์น่าดึงดูดใจ มีความซับซ้อนในตัวเอง และเต็มไปด้วยแพสชัน (Passion) คุณมีความเป็นศิลปินในตัวสูง ชอบความสวยงาม ความโรแมนติก และสิ่งสร้างสรรค์ คุณไม่ใช่คนเรียบง่าย แต่เป็นคนที่มีอารมณ์ความรู้สึกที่ลึกซึ้งและเข้มข้น เมื่อรักหรือสนใจอะไร คุณจะทุ่มเทสุดตัวและมีความเป็นตัวของตัวเองสูงมาก",
+            highlight: "ความกังวลใจลดลงด้วยมุมมองเชิงสร้างสรรค์ แรงบันดาลใจมีจุดกำเนิดมาจากความงดงามรอบตัว",
             colorTheme: "#ff8c00",
             bgGradient: "linear-gradient(180deg, #ffd3b6 0%, #ffaa64 100%)",
             glowColor: "#ffd1a9",
             drawSky: function(ctx, w, h, cx, cy, r, animFrame) {
-                // Sunset magenta and orange
                 let g = ctx.createLinearGradient(cx, cy - r, cx, cy + r);
                 g.addColorStop(0, '#ff4e50');
                 g.addColorStop(0.6, '#f9d423');
@@ -573,13 +593,11 @@
                 ctx.fillStyle = g;
                 ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
 
-                // Golden warm sun sinking down
                 let sunY = cy + 10 + Math.sin(animFrame * 0.01) * 8;
                 let sunPulse = 1 + Math.sin(animFrame * 0.05) * 0.05;
                 ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
                 ctx.beginPath(); ctx.arc(cx, sunY, 26 * sunPulse, 0, Math.PI*2); ctx.fill();
 
-                // Cute cloud silhouette drifting in front
                 ctx.fillStyle = 'rgba(255, 180, 180, 0.4)';
                 let cyX = cx - 25 + Math.sin(animFrame * 0.015) * 12;
                 ctx.beginPath();
@@ -588,7 +606,6 @@
                 ctx.arc(cyX + 25, sunY + 15, 14, 0, Math.PI*2);
                 ctx.fill();
 
-                // Twinkling warm sparkles
                 drawTinyStar(ctx, cx - 40, cy - 30, 4, 11, 4, '#fffae0');
                 drawTinyStar(ctx, cx + 40, cy - 40, 4, 8, 3, '#ffffff');
             }
@@ -602,7 +619,6 @@
             bgGradient: "linear-gradient(180deg, #1a1c29 0%, #0c0d14 100%)",
             glowColor: "#560bad",
             drawSky: function(ctx, w, h, cx, cy, r, animFrame) {
-                // Galaxy night sky
                 let g = ctx.createLinearGradient(cx, cy - r, cx, cy + r);
                 g.addColorStop(0, '#0f0c20');
                 g.addColorStop(0.5, '#15102a');
@@ -610,22 +626,19 @@
                 ctx.fillStyle = g;
                 ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
 
-                // Nebula purple aura dust
                 ctx.fillStyle = 'rgba(150, 50, 200, 0.22)';
                 ctx.beginPath(); ctx.arc(cx - 10, cy + 10, r * 0.7, 0, Math.PI*2); ctx.fill();
 
-                // Swinging crescent moon
                 ctx.save();
                 ctx.translate(cx + r * 0.35, cy - r * 0.35);
                 let moonSwing = Math.sin(animFrame * 0.02) * 0.06;
                 ctx.rotate(moonSwing);
                 ctx.fillStyle = '#fffde7';
                 ctx.beginPath(); ctx.arc(0, 0, 16, 0, Math.PI*2); ctx.fill();
-                ctx.fillStyle = g; // Match background
+                ctx.fillStyle = g; 
                 ctx.beginPath(); ctx.arc(-6, -2, 16, 0, Math.PI*2); ctx.fill();
                 ctx.restore();
 
-                // Dynamic twinkling stars
                 let stars = [
                     {x: -45, y: -25, size: 4},
                     {x: -20, y: 15, size: 3},
@@ -637,7 +650,6 @@
                     drawTinyStar(ctx, cx + st.x, cy + st.y, 4, st.size + 4, 1.5, 'rgba(255, 255, 255, ' + tw + ')');
                 });
 
-                // Falling shooting star every 120 frames
                 let shFrame = animFrame % 140;
                 if (shFrame < 25) {
                     ctx.strokeStyle = 'rgba(255, 255, 255, ' + (1 - shFrame/25) + ')';
@@ -735,11 +747,9 @@
                 let r = data[i];
                 let g = data[i+1];
                 let b = data[i+2];
-                // Remove the green circle area
                 if (g > 95 && g > r * 1.25 && g > b * 1.25) {
                     data[i+3] = 0; 
                 }
-                // Key out black surrounding background to make it perfectly transparent
                 if (r < 45 && g < 45 && b < 45) {
                     data[i+3] = 0;
                 }
@@ -750,12 +760,12 @@
             useChromaImg = true;
             console.log("Onlymiru chroma keychain initialized beautifully.");
         } catch(e) {
-            console.warn("Chroma extraction aborted due to local sandbox security boundaries. Falling back to clean vector render.");
+            console.warn("Chroma extraction blocked by iframe sandbox bounds. Switching to vector render fallback.");
             useChromaImg = false;
         }
     }
     chromaImg.onerror = function() {
-        console.warn("Onlymiru source photo file was skipped or not found. Drawing procedural vectors.");
+        console.warn("Source photo file 'ดาวนำทาง.jpg' not found. Drawing procedural fallback.");
         useChromaImg = false;
     }
 
@@ -803,15 +813,11 @@
         const resData = results[selectedType];
 
         if (useChromaImg && isChromaProcessed) {
-            // Draw animating live sky vector inside circular boundaries
             ctx.save();
             resData.drawSky(ctx, 400, 500, 226, 308, 72, animFrame);
             ctx.restore();
-
-            // Overlay the clean transparent photo keychain template on top
             ctx.drawImage(offscreenCanvas, 0, 0, 400, 500);
         } else {
-            // Draw clean procedural vector keychain fallback (completely transparent)
             drawVectorKeyring(canvas, ctx, resData.drawSky, animFrame);
         }
 
@@ -895,12 +901,11 @@
             { x: 105, y: 220, r: 14, color: '#e8dbfc' }
         ];
 
-        // Draw wire/chain stringing the beads together
         ctx.save();
         ctx.strokeStyle = '#94a3b8';
         ctx.lineWidth = 2.5;
         ctx.beginPath();
-        ctx.moveTo(185, 95); // connected near the bell
+        ctx.moveTo(185, 95); 
         beads.forEach(b => {
             ctx.lineTo(b.x, b.y);
         });
@@ -972,7 +977,6 @@
         ctx.stroke();
         ctx.restore();
 
-        // Draw animating interior sky
         ctx.save();
         skyDrawer(ctx, canvas.width, canvas.height, centerXP, centerYP, flowerR - 16, frame);
         ctx.restore();
@@ -982,7 +986,6 @@
         document.getElementById('question-area').classList.add('hidden');
         document.getElementById('result-area').classList.remove('hidden');
         
-        // Calculate the highest score key
         selectedType = Object.keys(scores).reduce((a, b) => scores[a] > scores[b] ? a : b);
         const res = results[selectedType];
         
@@ -991,16 +994,13 @@
         document.getElementById('res-desc').innerText = res.desc;
         document.getElementById('res-highlight').innerText = res.highlight;
 
-        // Set ambient theme colors dynamically
         document.body.style.background = res.bgGradient;
         document.getElementById('bg-glow').style.background = res.glowColor;
 
         loader.classList.add('hidden');
         
-        // Inject ambient falling sparkles inside card
         createResultSparkles();
 
-        // Start 60fps dynamic keychain frame loop
         if (animationId) cancelAnimationFrame(animationId);
         animateResultKeychain();
     }
@@ -1059,7 +1059,7 @@
         renderQuestion();
     }
 
-    // Start running the Onlymiru quiz
+    // เรียก Render แบบสอบถามทันที
     renderQuestion();
 </script>
 
