@@ -122,12 +122,6 @@
 </head>
 <body class="flex flex-col items-center justify-center p-4 relative overflow-x-hidden">
 
-<!-- ใช้ไฟล์เพลง Untitled (1).mp3 ในโฟลเดอร์ของลูกค้าเป็นหลักอันดับ 1 และใช้ Google Drive เป็นตัวสำรอง -->
-<audio id="bg-music" loop preload="auto">
-    <source src="Untitled (1).mp3" type="audio/mpeg">
-    <source src="https://docs.google.com/uc?export=download&id=1vu6boZHcGLgO0hYlunwDN0e9Z0mwBd5Q" type="audio/mpeg">
-</audio>
-
 <!-- Elegant Cozy Splash Screen to unlock Audio on Mobile and Desktop -->
 <div id="splash-screen" class="fixed inset-0 bg-gradient-to-b from-[#ffd1d9] to-[#d1e8ff] z-[100] flex flex-col items-center justify-center p-6 text-center transition-all duration-1000 ease-in-out">
     <div class="glass-card p-8 rounded-[36px] max-w-sm w-full flex flex-col items-center shadow-2xl border border-white/60">
@@ -257,54 +251,168 @@
         document.getElementById('logo-svg-fallback').classList.remove('hidden');
     }
 
-    const bgAudio = document.getElementById('bg-music');
-    let synthAudioCtx;
-    let synthGainNode;
+    // --- Web Audio API บำบัดสุดพรีเมียม (Cozy Healing Piano Synthesizer) ---
+    let audioCtx = null;
+    let masterGain = null;
+    let delayNode = null;
+    let delayFeedback = null;
     let isPlaying = false;
-    let useSynthFallback = false;
-    let synthInterval = null;
+    let musicInterval = null;
+    let melodyTimeout = null;
 
-    bgAudio.addEventListener('error', () => {
-        console.warn("Audio file is blocked or missing. Synthesizer fallback is ready.");
-        useSynthFallback = true;
-    }, true);
+    // คอร์ดบำบัดฟังสบายพาสเทล (7th & 9th Chord Progression)
+    const CHORDS = [
+        // Chord 1: Cmaj9
+        { bass: 65.41, pad: [130.81, 196.00, 246.94, 293.66, 329.63], melody: [392.00, 493.88, 587.33, 659.25, 783.99] }, 
+        // Chord 2: Fmaj9
+        { bass: 87.31, pad: [174.61, 220.00, 261.63, 329.63, 392.00], melody: [440.00, 523.25, 587.33, 698.46, 783.99] }, 
+        // Chord 3: Am9
+        { bass: 55.00, pad: [110.00, 164.81, 220.00, 261.63, 329.63], melody: [392.00, 493.88, 587.33, 659.25, 880.00] }, 
+        // Chord 4: G6/9
+        { bass: 49.00, pad: [97.99, 146.83, 196.00, 246.94, 293.66], melody: [392.00, 440.00, 493.88, 587.33, 739.99] }   
+    ];
+    let currentChordIndex = 0;
 
-    function initAudioOnUserGesture() {
-        try {
-            if (bgAudio) {
-                bgAudio.volume = 0.85;
-            }
-            if (!synthAudioCtx) {
-                synthAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                synthGainNode = synthAudioCtx.createGain();
-                synthGainNode.connect(synthAudioCtx.destination);
-                synthGainNode.gain.setValueAtTime(0, synthAudioCtx.currentTime);
-            }
-            if (synthAudioCtx && synthAudioCtx.state === 'suspended') {
-                synthAudioCtx.resume();
-            }
-        } catch (e) {
-            console.warn("Audio context generation deferred.", e);
+    // ฟังก์ชันสร้างเสียงเปียโนแบบอะคูสติกอุ่น ๆ (Warm Physical Synthesis)
+    function playPianoNote(frequency, type = 'triangle', duration = 3.5, velocity = 0.08) {
+        if (!audioCtx || audioCtx.state === 'suspended') return;
+
+        const now = audioCtx.currentTime;
+        
+        // ตัวหลัก (Warm Body) - ใช้คลื่นเสียงสามเหลี่ยมผ่าน Lowpass Filter
+        const oscBody = audioCtx.createOscillator();
+        const gainBody = audioCtx.createGain();
+        const filter = audioCtx.createBiquadFilter();
+
+        oscBody.type = type;
+        oscBody.frequency.setValueAtTime(frequency, now);
+
+        filter.type = 'lowpass';
+        filter.Q.setValueAtTime(1, now);
+        // Envelope สำหรับ Filter (วาดความคมตอนเริ่มเคาะแล้วหรี่ลงเป็นเสียงทุ้มอุ่น)
+        filter.frequency.setValueAtTime(1200, now);
+        filter.frequency.exponentialRampToValueAtTime(350, now + 1.2);
+
+        // Envelope ของระดับความดัง (Attack เร็วมาก, Decay ช้า ๆ คล้ายเปียโนคีย์บอร์ดจริง)
+        gainBody.gain.setValueAtTime(0, now);
+        gainBody.gain.linearRampToValueAtTime(velocity, now + 0.02);
+        gainBody.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+
+        oscBody.connect(filter);
+        filter.connect(gainBody);
+        
+        // ต่อเข้าสู่สายดีเลย์สะท้อน (Delay & Reverb Effect) และ Master Out
+        gainBody.connect(delayNode);
+        gainBody.connect(masterGain);
+
+        oscBody.start(now);
+        oscBody.stop(now + duration + 0.1);
+
+        // ตัวสำรองเสริมเสียงวิ้งระฆังแก้ว (Bell Sparkle for high notes)
+        if (frequency > 300) {
+            const oscBell = audioCtx.createOscillator();
+            const gainBell = audioCtx.createGain();
+            
+            oscBell.type = 'sine';
+            oscBell.frequency.setValueAtTime(frequency * 2, now); // สังเคราะห์เสียง Overtones คู่แปด
+
+            gainBell.gain.setValueAtTime(0, now);
+            gainBell.gain.linearRampToValueAtTime(velocity * 0.25, now + 0.01);
+            gainBell.gain.exponentialRampToValueAtTime(0.0001, now + 1.2);
+
+            oscBell.connect(gainBell);
+            gainBell.connect(delayNode);
+            gainBell.connect(masterGain);
+
+            oscBell.start(now);
+            oscBell.stop(now + 1.3);
+        }
+    }
+
+    // วงจรบรรเลงคอร์ดเปียโนและหยดเมโลดี้สุ่มบำบัด
+    function startPianoSession() {
+        if (!audioCtx) return;
+
+        function playLoop() {
+            if (!isPlaying) return;
+
+            const chord = CHORDS[currentChordIndex];
+            
+            // 1. บรรเลงเสียงเบสและคอร์ดแบคกราวด์ที่นุ่มลึกอบอุ่น
+            playPianoNote(chord.bass, 'sine', 5.5, 0.12); // Deep Bass Warmth
+            chord.pad.forEach((freq, idx) => {
+                // บรรเลงทีละตัวเฉียงเป็นเสียง Arpeggio พริ้ว ๆ
+                setTimeout(() => {
+                    if (isPlaying) playPianoNote(freq, 'triangle', 4.5, 0.03);
+                }, idx * 120);
+            });
+
+            // 2. สุ่มโน้ตเมโลดี้คริสตัลระยิบระยับลอยละล่อง
+            triggerMelodyCascade(chord.melody);
+
+            currentChordIndex = (currentChordIndex + 1) % CHORDS.length;
+        }
+
+        playLoop();
+        musicInterval = setInterval(playLoop, 5500); // เล่นคอร์ดใหม่ทุก 5.5 วินาที
+    }
+
+    function triggerMelodyCascade(melodyNotes) {
+        if (!isPlaying) return;
+
+        // สุ่มปล่อยตัวโน้ตเมโลดี้ช้า ๆ 3-4 ตัวต่อหนึ่งคอร์ด
+        const numNotes = 3 + Math.floor(Math.random() * 2);
+        for (let i = 0; i < numNotes; i++) {
+            const delayTime = 1000 + (i * 1200) + (Math.random() * 400); // เพิ่มความเป็นธรรมชาติของมนุษย์เล่น (Humanize)
+            melodyTimeout = setTimeout(() => {
+                if (isPlaying) {
+                    const randomNote = melodyNotes[Math.floor(Math.random() * melodyNotes.length)];
+                    playPianoNote(randomNote, 'sine', 3.0, 0.045);
+                }
+            }, delayTime);
+        }
+    }
+
+    function initAudioContext() {
+        if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            masterGain = audioCtx.createGain();
+            
+            // ตั้งความดังเริ่มต้นให้อุ่น สบายหู
+            masterGain.gain.setValueAtTime(0, audioCtx.currentTime);
+            masterGain.connect(audioCtx.destination);
+
+            // สร้างสายเอฟเฟกต์สะท้อน (Echo Delay Effects) เพื่อมิติเสียงฟุ้ง
+            delayNode = audioCtx.createDelay(2.0);
+            delayFeedback = audioCtx.createGain();
+            
+            delayNode.delayTime.setValueAtTime(0.48, audioCtx.currentTime); // จังหวะสะท้อนแสนหวาน
+            delayFeedback.gain.setValueAtTime(0.42, audioCtx.currentTime);  // ปริมาณเสียงสะท้อนกลับ
+
+            delayNode.connect(delayFeedback);
+            delayFeedback.connect(delayNode); // ป้อนเสียงกลับลูป
+            delayNode.connect(masterGain);    // ส่งเสียงดีเลย์ออกช่องหลัก
+        }
+        
+        if (audioCtx.state === 'suspended') {
+            audioCtx.resume();
         }
     }
 
     function startExperience() {
-        initAudioOnUserGesture();
+        initAudioContext();
 
         isPlaying = true;
         document.getElementById('music-icon').style.stroke = "#ff5d8f";
 
-        // พยายามเปิดเล่นไฟล์เพลงตรง ๆ (ทั้ง Untitled (1).mp3 หรือ Google Drive ตัวสำรอง)
-        bgAudio.play().then(() => {
-            useSynthFallback = false;
-            console.log("Playing the theme song successfully!");
-        }).catch(err => {
-            console.warn("Native browser blocked audio file autoplay. Playing warm synthesizer instead.", err);
-            useSynthFallback = true;
-            playSynthAmbient();
-        });
+        // ค่อย ๆ เฟดเสียงเข้าอย่างนุ่มนวลเพื่อความผ่อนคลาย (Fade-in over 2s)
+        masterGain.gain.setValueAtTime(0, audioCtx.currentTime);
+        masterGain.gain.linearRampToValueAtTime(0.35, audioCtx.currentTime + 2.0);
 
-        // ค่อย ๆ ซ่อนและลบหน้าจอเริ่มต้นออกอย่างละมุน
+        // เริ่มต้นบรรเลงเพลงบำบัด Onlymiru
+        startPianoSession();
+
+        // ค่อย ๆ ซ่อนหน้าจอเริ่มต้นออกอย่างละมุน
         const splash = document.getElementById('splash-screen');
         if (splash) {
             splash.classList.add('opacity-0', 'scale-105', 'pointer-events-none');
@@ -315,7 +423,7 @@
     }
 
     function toggleMusic() {
-        initAudioOnUserGesture();
+        initAudioContext();
         const tip = document.getElementById('music-tip');
 
         if (!isPlaying) {
@@ -336,87 +444,32 @@
                 }, 4000);
             }
 
-            bgAudio.play().then(() => {
-                useSynthFallback = false;
-            }).catch(err => {
-                useSynthFallback = true;
-                playSynthAmbient();
-            });
+            masterGain.gain.setValueAtTime(0, audioCtx.currentTime);
+            masterGain.gain.linearRampToValueAtTime(0.35, audioCtx.currentTime + 1.5);
+            startPianoSession();
         } else {
             isPlaying = false;
             document.getElementById('music-icon').style.stroke = "currentColor";
-            bgAudio.pause();
             
+            // เฟดเสียงออกทีละน้อยเพื่อไม่ให้เสียงขาดห้วนกระทันหัน (Fade-out)
+            if (masterGain) {
+                masterGain.gain.setValueAtTime(masterGain.gain.value, audioCtx.currentTime);
+                masterGain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 1.5);
+            }
+
+            if (musicInterval) {
+                clearInterval(musicInterval);
+                musicInterval = null;
+            }
+            if (melodyTimeout) {
+                clearTimeout(melodyTimeout);
+                melodyTimeout = null;
+            }
+
             if (tip) {
                 tip.classList.add('hidden');
                 tip.style.opacity = '0';
                 tip.style.transform = 'scale(0.95)';
-            }
-
-            stopSynthAmbient();
-        }
-    }
-
-    function playSynthAmbient() {
-        if (!synthAudioCtx) return;
-        try {
-            if (synthAudioCtx.state === 'suspended') {
-                synthAudioCtx.resume();
-            }
-            synthGainNode.gain.setValueAtTime(0, synthAudioCtx.currentTime);
-            synthGainNode.gain.linearRampToValueAtTime(0.2, synthAudioCtx.currentTime + 1.5);
-
-            const chords = [
-                [261.63, 329.63, 392.00, 493.88], // Cmaj7
-                [220.00, 261.63, 329.63, 392.00], // Am7
-                [174.61, 220.00, 261.63, 349.23], // Fmaj7
-                [196.00, 246.94, 293.66, 392.00]  // G7
-            ];
-            let chordIdx = 0;
-
-            function playNextChord() {
-                if (!isPlaying || !useSynthFallback) return;
-                let activeNotes = chords[chordIdx];
-
-                activeNotes.forEach((freq, idx) => {
-                    let osc = synthAudioCtx.createOscillator();
-                    let oscGain = synthAudioCtx.createGain();
-                    
-                    osc.type = 'triangle';
-                    osc.frequency.setValueAtTime(freq, synthAudioCtx.currentTime);
-                    
-                    oscGain.gain.setValueAtTime(0, synthAudioCtx.currentTime);
-                    oscGain.gain.linearRampToValueAtTime(0.04, synthAudioCtx.currentTime + 1.0 + (idx * 0.2));
-                    oscGain.gain.exponentialRampToValueAtTime(0.0001, synthAudioCtx.currentTime + 3.8);
-                    
-                    osc.connect(oscGain);
-                    oscGain.connect(synthGainNode);
-                    
-                    osc.start();
-                    osc.stop(synthAudioCtx.currentTime + 4.0);
-                });
-
-                chordIdx = (chordIdx + 1) % chords.length;
-            }
-
-            playNextChord();
-            synthInterval = setInterval(playNextChord, 4000);
-        } catch(e) {
-            console.warn("Synth exception triggered:", e);
-        }
-    }
-
-    function stopSynthAmbient() {
-        if (synthInterval) {
-            clearInterval(synthInterval);
-            synthInterval = null;
-        }
-        if (synthAudioCtx && synthGainNode) {
-            try {
-                synthGainNode.gain.setValueAtTime(synthGainNode.gain.value, synthAudioCtx.currentTime);
-                synthGainNode.gain.exponentialRampToValueAtTime(0.0001, synthAudioCtx.currentTime + 1.0);
-            } catch(e) {
-                console.warn("Synth volume fade exception:", e);
             }
         }
     }
@@ -674,6 +727,7 @@
         ctx.stroke();
     }
 
+    // ฟังก์ชันวาดรูปหัวใจประดับ
     function drawHeart(ctx, x, y, size) {
         ctx.save();
         ctx.beginPath();
@@ -685,6 +739,7 @@
         ctx.restore();
     }
 
+    // ฟังก์ชันวาดรูปดาวระยิบระยับ
     function drawTinyStar(ctx, cx, cy, spikes, outerRadius, innerRadius, fillStyle) {
         let rot = Math.PI / 2 * 3;
         let x = cx;
@@ -718,7 +773,7 @@
     let animationId = null;
     let animFrame = 0;
 
-    // Chroma processing & canvas render loops
+    // การโหลดเทมเพลตพวงกุญแจและระบบลบสีเขียว (Chroma Key)
     const canvas = document.getElementById('keychain-canvas');
     const ctx = canvas.getContext('2d');
     const loader = document.getElementById('canvas-loader');
@@ -729,7 +784,6 @@
     let useChromaImg = false;
     let isChromaProcessed = false;
 
-    // Load chroma keyed template
     chromaImg.src = 'ดาวนำทาง.jpg';
     chromaImg.onload = function() {
         offscreenCanvas.width = 400;
@@ -747,6 +801,7 @@
                 let r = data[i];
                 let g = data[i+1];
                 let b = data[i+2];
+                // คีย์ค่าสีเขียวออกให้โปร่งใสเพื่อรวมเข้ากับ Canvas หลังบ้าน
                 if (g > 95 && g > r * 1.25 && g > b * 1.25) {
                     data[i+3] = 0; 
                 }
@@ -758,14 +813,14 @@
             offscreenCtx.drawImage(tempCanvas, 0, 0, 400, 500);
             isChromaProcessed = true;
             useChromaImg = true;
-            console.log("Onlymiru chroma keychain initialized beautifully.");
+            console.log("Onlymiru chroma template processed beautifully.");
         } catch(e) {
-            console.warn("Chroma extraction blocked by iframe sandbox bounds. Switching to vector render fallback.");
+            console.warn("Chroma sandbox bypass engaged. Shifting to procedural vector engine.");
             useChromaImg = false;
         }
     }
     chromaImg.onerror = function() {
-        console.warn("Source photo file 'ดาวนำทาง.jpg' not found. Drawing procedural fallback.");
+        console.warn("Onlymiru: Resource 'ดาวนำทาง.jpg' unavailable. Triggering vector engine.");
         useChromaImg = false;
     }
 
@@ -824,12 +879,13 @@
         animationId = requestAnimationFrame(animateResultKeychain);
     }
 
+    // วาดพวงกุญแจจำลองแบบพลาสติกอะคริลิกใส (Realistic Acrylic Physics Rendering)
     function drawVectorKeyring(canvas, ctx, skyDrawer, frame) {
         const centerXP = 240;
         const centerYP = 310;
         const flowerR = 90;
 
-        // Draw silver metallic ring
+        // วาดห่วงพวงกุญแจโลหะชุบเงินด้านบนสุด
         ctx.save();
         ctx.shadowColor = 'rgba(165,180,203,0.3)';
         ctx.shadowBlur = 10;
@@ -844,7 +900,7 @@
         ctx.stroke();
         ctx.restore();
 
-        // Draw the transparent plastic/vinyl strap connecting Ring to Flower
+        // วาดสายหนังพลาสติกใสเชื่อมต่อเชื่อมระหว่างห่วงโลหะกับตัวดอกไม้
         ctx.save();
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
         ctx.lineWidth = 14;
@@ -854,7 +910,6 @@
         ctx.lineTo(235, 222);
         ctx.stroke();
 
-        // Inner glossy highlight for the strap
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
         ctx.lineWidth = 4;
         ctx.beginPath();
@@ -862,7 +917,7 @@
         ctx.lineTo(233, 222);
         ctx.stroke();
 
-        // Silver metal snap button on the strap
+        // หมุดโลหะประกบสายหนังใส
         ctx.fillStyle = '#e2e8f0';
         ctx.strokeStyle = '#64748b';
         ctx.lineWidth = 2;
@@ -872,7 +927,7 @@
         ctx.stroke();
         ctx.restore();
 
-        // Draw a metal jump ring connecting strap to flower acrylic loop
+        // วาดข้อต่อห่วงเหล็กกลมจิ๋วที่คล้องหัวดอกไม้
         ctx.save();
         ctx.strokeStyle = '#94a3b8';
         ctx.lineWidth = 3.5;
@@ -881,7 +936,7 @@
         ctx.stroke();
         ctx.restore();
 
-        // Draw acrylic hanger loop on top of the flower
+        // วาดหูคล้องพลาสติกที่หล่อติดตัวอะคริลิกดอกไม้
         ctx.save();
         ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.75)';
@@ -892,7 +947,7 @@
         ctx.stroke();
         ctx.restore();
 
-        // Draw beaded string hanging down
+        // สายร้อยลูกปัดพาสเทล
         const beads = [
             { x: 165, y: 110, r: 8, color: '#ffb3ba' },
             { x: 145, y: 130, r: 9, color: '#b9f2ff' },
@@ -929,7 +984,7 @@
             ctx.restore();
         });
 
-        // Draw a metal loop/crimp at the bottom end of the bead chain
+        // ข้อต่อนิเกิลล็อคสายลูกปัดด้านล่าง
         ctx.save();
         ctx.strokeStyle = '#64748b';
         ctx.lineWidth = 2.5;
@@ -938,7 +993,7 @@
         ctx.stroke();
         ctx.restore();
 
-        // Draw cute little golden bell attached
+        // วาดกระดิ่งลมสีทองจิ๋วส่ายไปมาแกว่งสมจริง
         ctx.save();
         ctx.shadowColor = 'rgba(0,0,0,0.1)';
         ctx.shadowBlur = 5;
@@ -956,7 +1011,7 @@
         ctx.stroke();
         ctx.restore();
 
-        // Draw clear flower acrylic keychain frame
+        // วาดโครงกรอบดอกไม้อะคริลิกใส (Acrylic Frame Outer Bounds)
         ctx.save();
         ctx.shadowColor = 'rgba(165,180,203,0.35)';
         ctx.shadowBlur = 18;
@@ -977,6 +1032,7 @@
         ctx.stroke();
         ctx.restore();
 
+        // สั่งวาดสีท้องฟ้าแบบแอนิเมชันด้านในกลีบดอกไม้
         ctx.save();
         skyDrawer(ctx, canvas.width, canvas.height, centerXP, centerYP, flowerR - 16, frame);
         ctx.restore();
@@ -1059,7 +1115,7 @@
         renderQuestion();
     }
 
-    // เรียก Render แบบสอบถามทันที
+    // เรียกลูปคำถามเริ่มต้น
     renderQuestion();
 </script>
 
